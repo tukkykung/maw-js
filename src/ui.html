@@ -57,12 +57,22 @@
     color: #64b5f6;
   }
   .term-input-line .prompt { color: #555; margin-right: 6px; }
-  .term-input-line .text { color: #e0e0e0; }
+  .term-input-line .text { color: #e0e0e0; white-space: pre; }
   .term-input-line .cursor {
     display: inline-block; width: 7px; height: 15px; background: #64b5f6;
     animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 1px;
   }
   .term-input-line.empty .cursor { background: #333; }
+  .term-input-line .clear-btn {
+    margin-left: auto; color: #555; cursor: pointer; font-size: 11px;
+    padding: 2px 8px; border-radius: 3px; user-select: none;
+  }
+  .term-input-line .clear-btn:hover { color: #f44336; background: #1a1a2e; }
+  .term-input-line.empty .clear-btn { display: none; }
+  .term-input-line .queue-count {
+    margin-left: 8px; color: #555; font-size: 11px;
+  }
+  .term-input-line.empty .queue-count { display: none; }
   @keyframes blink { 50% { opacity: 0; } }
 
   .toast {
@@ -89,6 +99,8 @@
     <div class="term-input-line empty" id="inputLine">
       <span class="prompt">&gt;</span>
       <span class="text" id="inputText"></span><span class="cursor"></span>
+      <span class="queue-count" id="queueCount"></span>
+      <span class="clear-btn" id="clearBtn">esc</span>
     </div>
   </div>
 </div>
@@ -206,10 +218,41 @@ function selectWindow(target, name) {
   location.hash = encodeURIComponent(target);
 }
 
-// Keyboard → tmux
+// Keyboard → tmux (queue-based)
+let sendQueue = [];
+let sending = false;
+
 function updateInputLine() {
   el('inputText').textContent = inputBuf;
-  el('inputLine').classList.toggle('empty', !inputBuf && !selectedTarget);
+  const hasContent = inputBuf || sendQueue.length;
+  el('inputLine').classList.toggle('empty', !hasContent && !selectedTarget);
+  el('queueCount').textContent = sendQueue.length ? `(${sendQueue.length} queued)` : '';
+}
+
+async function flushQueue() {
+  if (sending || !ws || ws.readyState !== 1) return;
+  sending = true;
+  while (sendQueue.length > 0) {
+    const text = sendQueue.shift();
+    ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text }));
+    updateInputLine();
+    // Small delay between queued sends so tmux can process
+    await new Promise(r => setTimeout(r, 100));
+  }
+  sending = false;
+}
+
+function queueSend(text) {
+  if (!text || !selectedTarget) return;
+  sendQueue.push(text);
+  updateInputLine();
+  flushQueue();
+}
+
+function clearInput() {
+  inputBuf = '';
+  sendQueue = [];
+  updateInputLine();
 }
 
 el('term').addEventListener('keydown', (e) => {
@@ -218,22 +261,29 @@ el('term').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     if (inputBuf) {
-      ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: inputBuf }));
+      queueSend(inputBuf);
       inputBuf = '';
       updateInputLine();
     }
   } else if (e.key === 'Backspace') {
     e.preventDefault();
-    inputBuf = inputBuf.slice(0, -1);
+    if (e.metaKey || e.ctrlKey) {
+      // Cmd+Backspace or Ctrl+Backspace = clear whole line
+      inputBuf = '';
+    } else {
+      inputBuf = inputBuf.slice(0, -1);
+    }
     updateInputLine();
   } else if (e.key === 'Escape') {
     e.preventDefault();
-    inputBuf = '';
-    updateInputLine();
-  } else if (e.key === 'Tab') {
-    // Send tab to tmux
+    clearInput();
+  } else if (e.key === 'c' && e.ctrlKey) {
+    // Ctrl+C = clear
     e.preventDefault();
-    ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: inputBuf + '\t' }));
+    clearInput();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    queueSend(inputBuf + '\t');
     inputBuf = '';
     updateInputLine();
   } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
@@ -241,6 +291,13 @@ el('term').addEventListener('keydown', (e) => {
     inputBuf += e.key;
     updateInputLine();
   }
+});
+
+// Clear button
+el('clearBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  clearInput();
+  el('term').focus();
 });
 
 // Keep focus on term
