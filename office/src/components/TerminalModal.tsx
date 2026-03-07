@@ -125,9 +125,9 @@ export function TerminalModal({ agent, send, onClose }: TerminalModalProps) {
         {/* Terminal output */}
         <div ref={termRef} style={{
           flex: 1, padding: "12px 16px", overflowY: "auto",
-          fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace", fontSize: 12,
-          lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#c8c8d0",
-          background: "#111118",
+          fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: 13,
+          lineHeight: 1.35, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#aaa",
+          background: "#0a0a0f",
           filter: "saturate(0.55) brightness(1.15) contrast(0.95)",
         }} dangerouslySetInnerHTML={{ __html: ansiToHtml(trimCapture(content)) }} />
 
