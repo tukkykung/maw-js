@@ -132,7 +132,7 @@ export function startServer(port = +(process.env.MAW_PORT || 3456)) {
   return server;
 }
 
-// Auto-start for PM2 (import.meta.main is false under PM2)
-if (import.meta.main || process.env.PM2_HOME || process.env.MAW_PORT) {
+// Auto-start unless imported by CLI (CLI sets MAW_CLI=1)
+if (!process.env.MAW_CLI) {
   startServer();
 }

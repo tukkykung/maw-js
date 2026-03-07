@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+process.env.MAW_CLI = "1";
 
 import { listSessions, findWindow, capture, sendKeys } from "./ssh";
 import { startServer } from "./server";
