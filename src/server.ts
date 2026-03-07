@@ -77,7 +77,8 @@ function stopIntervals() {
   if (sessionInterval) { clearInterval(sessionInterval); sessionInterval = null; }
 }
 
-if (import.meta.main) {
+// Always start — import.meta.main is false under PM2
+{
   const port = +(process.env.MAW_PORT || 3456);
 
   Bun.serve({
