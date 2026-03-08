@@ -45,8 +45,8 @@ export const MissionControl = memo(function MissionControl({
     }));
 
     // Calculate positions in a radial layout — fill the viewport
-    const cx = 600, cy = 450;
-    const radius = Math.min(340, 180 + sessionList.length * 25);
+    const cx = 600, cy = 500;
+    const radius = Math.min(320, 160 + sessionList.length * 22);
 
     return sessionList.map((s, i) => {
       const angle = (i / sessionList.length) * Math.PI * 2 - Math.PI / 2;
@@ -65,7 +65,7 @@ export const MissionControl = memo(function MissionControl({
     <div className="relative w-full h-screen overflow-hidden" style={{ background: "#020208" }}>
       {/* SVG Mission Control */}
       <svg
-        viewBox="0 0 1200 800"
+        viewBox="0 0 1200 1000"
         className="w-full h-full"
         style={{ maxHeight: "100vh" }}
       >
@@ -80,36 +80,36 @@ export const MissionControl = memo(function MissionControl({
         </defs>
 
         {/* Background glow */}
-        <circle cx={600} cy={450} r={500} fill="url(#mc-bg-glow)" />
+        <circle cx={600} cy={500} r={500} fill="url(#mc-bg-glow)" />
 
         {/* Grid lines */}
         {Array.from({ length: 13 }, (_, i) => (
-          <line key={`vl-${i}`} x1={i * 100} y1={0} x2={i * 100} y2={900}
+          <line key={`vl-${i}`} x1={i * 100} y1={0} x2={i * 100} y2={1000}
             stroke="#ffffff" strokeWidth={0.3} opacity={0.03} />
         ))}
-        {Array.from({ length: 10 }, (_, i) => (
+        {Array.from({ length: 11 }, (_, i) => (
           <line key={`hl-${i}`} x1={0} y1={i * 100} x2={1200} y2={i * 100}
             stroke="#ffffff" strokeWidth={0.3} opacity={0.03} />
         ))}
 
         {/* Orbital rings */}
-        <circle cx={600} cy={450} r={150} fill="none" stroke="#26c6da" strokeWidth={0.5} opacity={0.08}
+        <circle cx={600} cy={500} r={150} fill="none" stroke="#26c6da" strokeWidth={0.5} opacity={0.08}
           strokeDasharray="4 8" />
-        <circle cx={600} cy={450} r={300} fill="none" stroke="#7e57c2" strokeWidth={0.5} opacity={0.06}
+        <circle cx={600} cy={500} r={300} fill="none" stroke="#7e57c2" strokeWidth={0.5} opacity={0.06}
           strokeDasharray="6 12" />
-        <circle cx={600} cy={450} r={450} fill="none" stroke="#ffa726" strokeWidth={0.5} opacity={0.04}
+        <circle cx={600} cy={500} r={450} fill="none" stroke="#ffa726" strokeWidth={0.5} opacity={0.04}
           strokeDasharray="8 16" />
 
         {/* Center hub */}
-        <circle cx={600} cy={450} r={45} fill="none" stroke="#26c6da" strokeWidth={1} opacity={0.15} />
-        <circle cx={600} cy={450} r={7} fill="#26c6da" opacity={0.4} />
-        <text x={600} y={418} textAnchor="middle" fill="#26c6da" fontSize={12} opacity={0.5}
+        <circle cx={600} cy={500} r={45} fill="none" stroke="#26c6da" strokeWidth={1} opacity={0.15} />
+        <circle cx={600} cy={500} r={7} fill="#26c6da" opacity={0.4} />
+        <text x={600} y={468} textAnchor="middle" fill="#26c6da" fontSize={12} opacity={0.5}
           fontFamily="'SF Mono', monospace" letterSpacing={5}>MISSION CONTROL</text>
 
         {/* Connection lines from hub to sessions */}
         {layout.map((s) => (
           <line key={`line-${s.session.name}`}
-            x1={600} y1={450} x2={s.x} y2={s.y}
+            x1={600} y1={500} x2={s.x} y2={s.y}
             stroke={s.style.accent} strokeWidth={0.5} opacity={0.08}
             strokeDasharray="2 6"
           />
@@ -222,56 +222,32 @@ export const MissionControl = memo(function MissionControl({
         })}
       </svg>
 
-      {/* HUD overlay */}
-      <div className="absolute top-4 left-6 right-6 flex items-center gap-4 px-6 py-3 rounded-2xl bg-black/50 backdrop-blur-xl border border-white/[0.06]">
-        <h1 className="text-lg font-bold tracking-[6px] text-cyan-400 uppercase">
-          Mission Control
-        </h1>
-        <span className="text-[10px] text-white/40 tracking-[3px] hidden sm:inline">
-          oracle fleet overview
-        </span>
-
-        <div className="ml-auto flex items-center gap-5 text-[11px] text-white/70">
-          <span className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400 shadow-[0_0_6px_#4caf50]" : "bg-red-400 animate-pulse"}`} />
-            {connected ? "LIVE" : "..."}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-orange-400" />
-            <strong className="text-orange-400">{busyCount}</strong> busy
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <strong className="text-emerald-400">{readyCount}</strong> ready
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-white/30" />
-            <strong className="text-white/40">{idleCount}</strong> idle
-          </span>
-          <a href="/office/" className="text-white/50 hover:text-white/80 transition-colors">Office</a>
-          <a href="/" className="text-white/50 hover:text-white/80 transition-colors">Terminal</a>
-          <a href="/dashboard" className="text-white/50 hover:text-white/80 transition-colors">Orbital</a>
-        </div>
-      </div>
-
       {/* Bottom stats */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-6 px-6 py-2 rounded-xl bg-black/40 backdrop-blur border border-white/[0.04]">
-        <span className="text-[10px] text-white/50 tracking-widest uppercase">Fleet Power</span>
-        <div className="w-32 h-1.5 bg-white/10 rounded-full overflow-hidden">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-yellow-400" />
+          <strong className="text-yellow-400 text-xs">{busyCount}</strong>
+          <span className="text-[10px] text-white/50">busy</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <strong className="text-emerald-400 text-xs">{readyCount}</strong>
+          <span className="text-[10px] text-white/50">ready</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-white/30" />
+          <strong className="text-white/50 text-xs">{idleCount}</strong>
+          <span className="text-[10px] text-white/50">idle</span>
+        </span>
+        <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-700"
             style={{
               width: `${Math.min(100, (busyCount / Math.max(1, agents.length)) * 100)}%`,
-              background: busyCount > 5 ? "#ef5350" : busyCount > 2 ? "#ffa726" : "#4caf50",
+              background: busyCount > 5 ? "#ef5350" : busyCount > 2 ? "#fdd835" : "#4caf50",
             }}
           />
         </div>
-        <span className="text-[10px] text-white/50 tabular-nums">
-          {busyCount}/{agents.length} active
-        </span>
-        <span className="text-[10px] text-white/40 tabular-nums">
-          {sessions.length} rooms
-        </span>
       </div>
     </div>
   );

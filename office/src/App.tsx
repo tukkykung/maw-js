@@ -67,9 +67,23 @@ export function App() {
     send({ type: "select", target: next.target });
   }, [selectedAgent, siblings, send]);
 
+  const terminalModal = selectedAgent && (
+    <TerminalModal
+      agent={selectedAgent}
+      send={send}
+      onClose={() => setSelectedAgent(null)}
+      onNavigate={onNavigate}
+      onSelectSibling={onSelectAgent}
+      siblings={siblings}
+    />
+  );
+
   if (route === "mission") {
     return (
-      <>
+      <div className="relative min-h-screen" style={{ background: "#020208" }}>
+        <div className="relative z-10">
+          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="mission" />
+        </div>
         <MissionControl
           sessions={sessions}
           agents={agents}
@@ -77,17 +91,8 @@ export function App() {
           connected={connected}
           onSelectAgent={onSelectAgent}
         />
-        {selectedAgent && (
-          <TerminalModal
-            agent={selectedAgent}
-            send={send}
-            onClose={() => setSelectedAgent(null)}
-            onNavigate={onNavigate}
-            onSelectSibling={onSelectAgent}
-            siblings={siblings}
-          />
-        )}
-      </>
+        {terminalModal}
+      </div>
     );
   }
 
@@ -95,19 +100,10 @@ export function App() {
     <div className="relative min-h-screen">
       <UniverseBg />
       <div className="relative z-10">
-        <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} />
+        <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="office" />
         <RoomGrid sessions={sessions} agents={agents} saiyanTargets={saiyanTargets} onSelectAgent={onSelectAgent} />
       </div>
-      {selectedAgent && (
-        <TerminalModal
-          agent={selectedAgent}
-          send={send}
-          onClose={() => setSelectedAgent(null)}
-          onNavigate={onNavigate}
-          onSelectSibling={onSelectAgent}
-          siblings={siblings}
-        />
-      )}
+      {terminalModal}
     </div>
   );
 }
