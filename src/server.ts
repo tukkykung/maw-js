@@ -46,6 +46,8 @@ app.get("/office/*", serveStatic({
 
 // Serve WASM office (Macroquad / Rust → WASM)
 app.get("/wasm-office", serveStatic({ root: "./dist-wasm-office", path: "/index.html" }));
+// Bridge version: canvas + HTML overlay with two-way WASM↔JS bridge
+app.get("/wasm-office/bridge", serveStatic({ root: "./dist-wasm-office", path: "/bridge.html" }));
 app.get("/wasm-office/*", serveStatic({
   root: "./",
   rewriteRequestPath: (p) => p.replace(/^\/wasm-office/, "/dist-wasm-office"),
