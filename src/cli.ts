@@ -170,25 +170,76 @@ async function cmdWake(oracle: string, opts: { task?: string; newWt?: string; pr
   return `${session}:${windowName}`;
 }
 
+function todayDate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function timePeriod(): string {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return "morning";
+  if (h >= 12 && h < 18) return "afternoon";
+  if (h >= 18) return "evening";
+  return "midnight";
+}
+
+async function findOrCreateDailyThread(repo: string): Promise<{ url: string; num: number }> {
+  const date = todayDate();
+  const threadTitle = `📅 ${date} Daily Thread`;
+
+  // Search for existing daily thread
+  const existing = (await ssh(
+    `gh issue list --repo ${repo} --search '${threadTitle} in:title' --state open --json number,url,title --limit 1`
+  )).trim();
+  const parsed = JSON.parse(existing || "[]");
+  if (parsed.length > 0 && parsed[0].title === threadTitle) {
+    return { url: parsed[0].url, num: parsed[0].number };
+  }
+
+  // Create new daily thread
+  const url = (await ssh(
+    `gh issue create --repo ${repo} -t '${threadTitle.replace(/'/g, "'\\''")}' -b 'Tasks for ${date}' -l daily-thread`
+  )).trim();
+  const m = url.match(/\/(\d+)$/);
+  const num = m ? +m[1] : 0;
+  console.log(`\x1b[32m+\x1b[0m daily thread #${num}: ${url}`);
+  return { url, num };
+}
+
 async function cmdPulseAdd(title: string, opts: { oracle?: string; priority?: string; wt?: string }) {
   const repo = "laris-co/pulse-oracle";
   const projectNum = 6; // Master Board
+  const period = timePeriod();
 
-  // 1. Create issue
+  // 0. Find or create daily thread
+  const thread = await findOrCreateDailyThread(repo);
+
+  // 1. Create task issue as sub-issue of daily thread
   const escaped = title.replace(/'/g, "'\\''");
   const labels: string[] = [];
   if (opts.oracle) labels.push(`oracle:${opts.oracle}`);
-  if (opts.priority) labels.push(opts.priority);
-  const labelFlags = labels.map(l => `-l '${l}'`).join(" ");
+  const labelFlags = labels.length ? labels.map(l => `-l '${l}'`).join(" ") : "";
+  const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const body = `Parent: #${thread.num}\\n\\n🕐 ${now} (${period})`;
 
   const issueUrl = (await ssh(
-    `gh issue create --repo ${repo} -t '${escaped}' ${labelFlags} -b ''`
+    `gh issue create --repo ${repo} -t '${escaped}' ${labelFlags} -b '${body}'`
   )).trim();
   const m = issueUrl.match(/\/(\d+)$/);
   const issueNum = m ? +m[1] : 0;
-  console.log(`\x1b[32m+\x1b[0m issue #${issueNum}: ${issueUrl}`);
+  console.log(`\x1b[32m+\x1b[0m issue #${issueNum} (${period}): ${issueUrl}`);
 
-  // 2. Add to Master Board
+  // 2. Add sub-issue link to daily thread
+  try {
+    await ssh(`gh issue edit ${thread.num} --repo ${repo} --add-sub-issue '${issueUrl}'`);
+    console.log(`\x1b[32m+\x1b[0m linked to daily thread #${thread.num}`);
+  } catch {
+    // Fallback: comment on thread if sub-issue API not available
+    await ssh(`gh issue comment ${thread.num} --repo ${repo} -b '- [ ] #${issueNum} ${title} (${now} ${period})'`);
+    console.log(`\x1b[32m+\x1b[0m commented on daily thread #${thread.num}`);
+  }
+
+  // 3. Add to Master Board
   try {
     await ssh(`gh project item-add ${projectNum} --owner laris-co --url '${issueUrl}'`);
     console.log(`\x1b[32m+\x1b[0m added to Master Board (#${projectNum})`);
