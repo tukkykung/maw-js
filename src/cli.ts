@@ -68,7 +68,7 @@ function usage() {
   maw wake <oracle> [task]    Wake oracle in tmux window + claude
   maw fleet init              Scan ghq repos, generate fleet/*.json
   maw wake all [--kill]       Wake entire fleet from fleet/*.json
-  maw sleep                   Put all fleet sessions to sleep
+  maw stop                    Stop all fleet sessions
   maw spawn <oracle> [opts]   Create tmux session from worktrees
   maw oracle ls               Fleet status (awake/sleeping/worktrees)
   maw overview              War-room: all oracles in split panes
@@ -119,7 +119,7 @@ if (!cmd || cmd === "--help" || cmd === "-h") {
   await cmdSend(args[1], args.slice(2).join(" "));
 } else if (cmd === "fleet" && args[1] === "init") {
   await cmdFleetInit();
-} else if (cmd === "sleep" || cmd === "rest") {
+} else if (cmd === "stop" || cmd === "sleep" || cmd === "rest") {
   await cmdSleep();
 } else if (cmd === "wake") {
   if (!args[1]) { console.error("usage: maw wake <oracle> [task] [--new <name>]\n       maw wake all [--kill]"); process.exit(1); }

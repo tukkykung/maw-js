@@ -3,14 +3,19 @@ export const SVG_HEIGHT = 900;
 
 // Session group → room mapping
 export const ROOM_COLORS: Record<string, { accent: string; floor: string; wall: string; label: string }> = {
-  "0":          { accent: "#26c6da", floor: "#1a2228", wall: "#0e1a20", label: "Main" },
-  "1-oracles":  { accent: "#7e57c2", floor: "#1a1428", wall: "#120e1e", label: "Oracles" },
-  "2-arra":     { accent: "#42a5f5", floor: "#141a28", wall: "#0e1420", label: "Arra" },
-  "3-brewing":  { accent: "#ffa726", floor: "#281e14", wall: "#201810", label: "Brewing" },
-  "4-watchers": { accent: "#4caf50", floor: "#142818", wall: "#0e2010", label: "Watchers" },
-  "5-tools":    { accent: "#ef5350", floor: "#281418", wall: "#200e12", label: "Tools" },
-  "6-solar":    { accent: "#fdd835", floor: "#282814", wall: "#20200e", label: "Solar" },
-  "7-hermes":   { accent: "#26a69a", floor: "#142824", wall: "#0e201a", label: "Hermes" },
+  "0":             { accent: "#26c6da", floor: "#1a2228", wall: "#0e1a20", label: "Main" },
+  "01-oracles":    { accent: "#7e57c2", floor: "#1a1428", wall: "#120e1e", label: "Oracles" },
+  "02-arra":       { accent: "#42a5f5", floor: "#141a28", wall: "#0e1420", label: "Arra" },
+  "03-brewing":    { accent: "#ffa726", floor: "#281e14", wall: "#201810", label: "Brewing" },
+  "04-watchers":   { accent: "#4caf50", floor: "#142818", wall: "#0e2010", label: "Watchers" },
+  "05-tools":      { accent: "#ef5350", floor: "#281418", wall: "#200e12", label: "Tools" },
+  "06-solar":      { accent: "#fdd835", floor: "#282814", wall: "#20200e", label: "Solar" },
+  "07-hermes":     { accent: "#26a69a", floor: "#142824", wall: "#0e201a", label: "Hermes" },
+  "08-neo":        { accent: "#e040fb", floor: "#1e1428", wall: "#160e1e", label: "Neo" },
+  "09-pulse":      { accent: "#ff5252", floor: "#281414", wall: "#200e0e", label: "Pulse" },
+  "10-calliope":   { accent: "#69f0ae", floor: "#142818", wall: "#0e2010", label: "Calliope" },
+  "11-homekeeper": { accent: "#448aff", floor: "#141a28", wall: "#0e1420", label: "Homekeeper" },
+  "99-overview":   { accent: "#78909c", floor: "#1a1a1e", wall: "#121216", label: "Overview" },
 };
 
 const FALLBACK_ROOMS = [

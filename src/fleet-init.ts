@@ -15,22 +15,24 @@ interface FleetSession {
 
 // Default grouping: oracle name → session group
 const GROUPS: Record<string, { session: string; order: number }> = {
-  homekeeper: { session: "oracles", order: 1 },
-  nexus: { session: "oracles", order: 1 },
-  arthur: { session: "arra", order: 2 },
-  dustboy: { session: "arra", order: 2 },
-  floodboy: { session: "arra", order: 2 },
-  fireman: { session: "arra", order: 2 },
-  xiaoer: { session: "brewing", order: 3 },
-  maeon: { session: "brewing", order: 3 },
-  mother: { session: "watchers", order: 4 },
-  landing: { session: "watchers", order: 4 },
-  odin: { session: "watchers", order: 4 },
-  volt: { session: "solar", order: 6 },
-  hermes: { session: "hermes", order: 7 },
-  neo: { session: "neo", order: 8 },
-  pulse: { session: "pulse", order: 9 },
-  calliope: { session: "calliope", order: 10 },
+  // Own sessions — each oracle gets a dedicated tmux session
+  homekeeper: { session: "homekeeper", order: 1 },
+  nexus: { session: "nexus", order: 2 },
+  hermes: { session: "hermes", order: 3 },
+  neo: { session: "neo", order: 4 },
+  pulse: { session: "pulse", order: 5 },
+  calliope: { session: "calliope", order: 6 },
+  volt: { session: "volt", order: 7 },
+  mother: { session: "mother", order: 8 },
+  odin: { session: "odin", order: 9 },
+  // Merged groups — related oracles share a session
+  arthur: { session: "arra", order: 10 },
+  dustboy: { session: "arra", order: 10 },
+  floodboy: { session: "arra", order: 10 },
+  fireman: { session: "arra", order: 10 },
+  xiaoer: { session: "brewing", order: 11 },
+  maeon: { session: "brewing", order: 11 },
+  landing: { session: "landing", order: 12 },
 };
 
 export async function cmdFleetInit() {

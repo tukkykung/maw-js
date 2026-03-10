@@ -160,8 +160,8 @@ export const MissionControl = memo(function MissionControl({
       style: roomStyle(s.name),
     }));
 
-    const cx = 600, cy = 500;
-    const radius = Math.min(320, 160 + sessionList.length * 22);
+    const cx = 640, cy = 460;
+    const radius = Math.min(370, 160 + sessionList.length * 22);
 
     return sessionList.map((s, i) => {
       const angle = (i / sessionList.length) * Math.PI * 2 - Math.PI / 2;
