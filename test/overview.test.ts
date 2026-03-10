@@ -125,7 +125,7 @@ describe("mirrorCmd", () => {
   test("uses watch --color for flicker-free ANSI display", () => {
     const cmd = mirrorCmd({ session: "2-hermes", window: 2, windowName: "hermes-oracle", oracle: "hermes" });
     expect(cmd).toContain("watch --color -t -n0.5");
-    expect(cmd).toContain("tmux capture-pane");
+    expect(cmd).toContain("mirror.sh");
   });
 
   test("does not echo input (watch handles this)", () => {
@@ -155,7 +155,7 @@ describe("chunkTargets", () => {
   });
 
   test("splits into multiple pages at PANES_PER_PAGE", () => {
-    const sessions: Session[] = Array.from({ length: 8 }, (_, i) => ({
+    const sessions: Session[] = Array.from({ length: PANES_PER_PAGE + 2 }, (_, i) => ({
       name: `${i + 1}-oracle${i}`,
       windows: [{ index: 1, name: `win${i}`, active: true }],
     }));
@@ -163,7 +163,7 @@ describe("chunkTargets", () => {
     const pages = chunkTargets(targets);
     expect(pages).toHaveLength(2);
     expect(pages[0]).toHaveLength(PANES_PER_PAGE);
-    expect(pages[1]).toHaveLength(8 - PANES_PER_PAGE);
+    expect(pages[1]).toHaveLength(2);
   });
 
   test("handles exact multiple of page size", () => {

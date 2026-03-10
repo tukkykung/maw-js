@@ -1,5 +1,8 @@
 import { listSessions, ssh } from "./ssh";
 import type { Session } from "./ssh";
+import { dirname, join } from "path";
+
+const MIRROR_SH = join(dirname(import.meta.path), "mirror.sh");
 
 export interface OverviewTarget {
   session: string;
@@ -8,7 +11,7 @@ export interface OverviewTarget {
   oracle: string;
 }
 
-export const PANES_PER_PAGE = 4;
+export const PANES_PER_PAGE = 9;
 
 export function buildTargets(sessions: Session[], filters: string[]): OverviewTarget[] {
   let targets = sessions
@@ -49,7 +52,7 @@ export function paneTitle(t: OverviewTarget): string {
 
 export function mirrorCmd(t: OverviewTarget): string {
   const target = `${t.session}:${t.window}`;
-  return `watch --color -t -n0.5 "tmux capture-pane -t '${target}' -e -p 2>/dev/null | sed -E 's/[─━]{6,}/────────────────────────────────────────────────────────────/g' | grep -v '^$' | tail -\\$(tput lines)"`;
+  return `watch --color -t -n0.5 "${MIRROR_SH} '${target}'"`;
 }
 
 export function pickLayout(count: number): string {
