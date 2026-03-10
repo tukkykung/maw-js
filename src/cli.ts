@@ -335,6 +335,126 @@ async function cmdPulseAdd(title: string, opts: { oracle?: string; priority?: st
   }
 }
 
+async function cmdPulseLs(opts: { sync?: boolean }) {
+  const repo = "laris-co/pulse-oracle";
+
+  // Fetch all open issues
+  const issuesJson = (await ssh(
+    `gh issue list --repo ${repo} --state open --json number,title,labels --limit 50`
+  )).trim();
+  const issues: { number: number; title: string; labels: { name: string }[] }[] = JSON.parse(issuesJson || "[]");
+
+  // Categorize
+  const projects: typeof issues = [];
+  const tools: typeof issues = [];
+  const today: typeof issues = [];
+  const threads: typeof issues = [];
+
+  for (const issue of issues) {
+    const labels = issue.labels.map(l => l.name);
+    if (labels.includes("daily-thread")) { threads.push(issue); continue; }
+    if (/^P\d{3}/.test(issue.title)) { projects.push(issue); continue; }
+    today.push(issue); // will filter active below
+  }
+
+  // Separate tools from today's active
+  const toolIssues: typeof issues = [];
+  const activeIssues: typeof issues = [];
+  for (const issue of today) {
+    const isToday = issue.title.includes("Daily") || issue.number > (threads[0]?.number || 0);
+    if (isToday && !issue.title.includes("Daily")) activeIssues.push(issue);
+    else toolIssues.push(issue);
+  }
+
+  const getOracle = (issue: typeof issues[0]) => {
+    const label = issue.labels.find(l => l.name.startsWith("oracle:"));
+    return label ? label.name.replace("oracle:", "") : "—";
+  };
+
+  // Terminal table
+  const line = (w: number) => "─".repeat(w);
+  console.log(`\n\x1b[36m📋 Pulse Board\x1b[0m\n`);
+
+  if (projects.length) {
+    console.log(`\x1b[33mProjects (${projects.length})\x1b[0m`);
+    console.log(`┌──────┬${"─".repeat(50)}┬──────────────┐`);
+    for (const p of projects.sort((a, b) => a.number - b.number)) {
+      const oracle = getOracle(p);
+      console.log(`│ \x1b[32m#${String(p.number).padEnd(3)}\x1b[0m │ ${p.title.slice(0, 48).padEnd(48)} │ ${oracle.padEnd(12)} │`);
+    }
+    console.log(`└──────┴${"─".repeat(50)}┴──────────────┘`);
+  }
+
+  if (toolIssues.length) {
+    console.log(`\n\x1b[33mTools/Infra (${toolIssues.length})\x1b[0m`);
+    console.log(`┌──────┬${"─".repeat(50)}┬──────────────┐`);
+    for (const t of toolIssues.sort((a, b) => a.number - b.number)) {
+      const oracle = getOracle(t);
+      console.log(`│ \x1b[32m#${String(t.number).padEnd(3)}\x1b[0m │ ${t.title.slice(0, 48).padEnd(48)} │ ${oracle.padEnd(12)} │`);
+    }
+    console.log(`└──────┴${"─".repeat(50)}┴──────────────┘`);
+  }
+
+  if (activeIssues.length) {
+    console.log(`\n\x1b[33mActive Today (${activeIssues.length})\x1b[0m`);
+    for (const a of activeIssues.sort((a2, b) => a2.number - b.number)) {
+      const oracle = getOracle(a);
+      console.log(`  \x1b[33m🟡\x1b[0m #${a.number} ${a.title} → ${oracle}`);
+    }
+  }
+
+  console.log(`\n\x1b[36m${issues.length - threads.length} open\x1b[0m\n`);
+
+  // --sync: update daily thread with checkboxes
+  if (opts.sync) {
+    const thread = threads.find(t => t.title.includes(todayDate()));
+    if (!thread) { console.log("No daily thread found for today"); return; }
+
+    const allTasks = [...projects, ...toolIssues, ...activeIssues].sort((a, b) => a.number - b.number);
+    const lines: string[] = [`## 📋 Pulse Board Index (${todayLabel()})`, ""];
+
+    if (projects.length) {
+      lines.push(`### Projects (${projects.length})`, "");
+      for (const p of projects.sort((a, b) => a.number - b.number)) {
+        lines.push(`- [ ] #${p.number} ${p.title} → ${getOracle(p)}`);
+      }
+      lines.push("");
+    }
+    if (toolIssues.length) {
+      lines.push(`### Tools/Infra (${toolIssues.length})`, "");
+      for (const t of toolIssues.sort((a, b) => a.number - b.number)) {
+        lines.push(`- [ ] #${t.number} ${t.title} → ${getOracle(t)}`);
+      }
+      lines.push("");
+    }
+    if (activeIssues.length) {
+      lines.push(`### Active Today (${activeIssues.length})`, "");
+      for (const a of activeIssues.sort((a2, b) => a2.number - b.number)) {
+        lines.push(`- [ ] #${a.number} ${a.title} → ${getOracle(a)} 🟡`);
+      }
+      lines.push("");
+    }
+    lines.push(`**${issues.length - threads.length} open** — Homekeeper Oracle 🤖`);
+
+    const body = lines.join("\n").replace(/'/g, "'\\''");
+
+    // Find or create index comment
+    const commentsJson2 = (await ssh(
+      `gh api repos/${repo}/issues/${thread.number}/comments --jq '[.[] | {id: .id, body: .body}]'`
+    )).trim();
+    const comments: { id: string; body: string }[] = JSON.parse(commentsJson2 || "[]");
+    const indexComment = comments.find(c => c.body.includes("Pulse Board Index"));
+
+    if (indexComment) {
+      await ssh(`gh api repos/${repo}/issues/comments/${indexComment.id} -X PATCH -f body='${body}'`);
+      console.log(`\x1b[32m✅\x1b[0m synced to daily thread #${thread.number}`);
+    } else {
+      await ssh(`gh api repos/${repo}/issues/${thread.number}/comments -f body='${body}'`);
+      console.log(`\x1b[32m+\x1b[0m index posted to daily thread #${thread.number}`);
+    }
+  }
+}
+
 async function cmdSpawn(oracle: string, opts: { name?: string; continue?: boolean }) {
   const { repoPath, repoName, parentDir } = await resolveOracle(oracle);
 
@@ -395,9 +515,10 @@ function usage() {
   maw wake neo --new free     Create worktree + wake
 
 \x1b[33mPulse add:\x1b[0m
+  maw pulse ls                Board table (terminal)
+  maw pulse ls --sync         + update daily thread checkboxes
   maw pulse add "Fix bug" --oracle neo
-  maw pulse add "Add status tool" --oracle neo --wt oracle-v2
-  maw pulse add "Deploy" --oracle hermes --wt bitkub
+  maw pulse add "task" --oracle neo --wt oracle-v2
 
 \x1b[33mSpawn options:\x1b[0m
   --name <session>            Custom tmux session name
@@ -447,8 +568,11 @@ if (!cmd || cmd === "--help" || cmd === "-h") {
     }
     if (!title) { console.error('usage: maw pulse add "task title" --oracle <name> [--wt <repo>]'); process.exit(1); }
     await cmdPulseAdd(title, pulseOpts);
+  } else if (subcmd === "ls" || subcmd === "list") {
+    const sync = args.includes("--sync");
+    await cmdPulseLs({ sync });
   } else {
-    console.error("usage: maw pulse add <title> [opts]");
+    console.error("usage: maw pulse <add|ls> [opts]");
     process.exit(1);
   }
 } else if (cmd === "spawn") {
