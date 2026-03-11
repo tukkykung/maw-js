@@ -3,6 +3,7 @@ import type { Session, AgentState, PaneStatus, AgentEvent } from "../lib/types";
 import { stripAnsi } from "../lib/ansi";
 import { playSaiyanSound } from "../lib/sounds";
 import { agentSortKey } from "../lib/constants";
+import { useFleetStore } from "../lib/store";
 
 // Simple string hash
 function hash(s: string): number {
@@ -33,9 +34,15 @@ export function useSessions() {
     });
   }, []);
 
+  const markBusy = useFleetStore((s) => s.markBusy);
+
   const handleMessage = useCallback((data: any) => {
     if (data.type === "sessions") {
       setSessions(data.sessions);
+    } else if (data.type === "recent") {
+      // Server-side recent agents → merge into zustand store
+      const agents: { target: string; name: string; session: string }[] = data.agents || [];
+      if (agents.length > 0) markBusy(agents);
     } else if (data.type === "previews") {
       // Lightweight preview updates from viewport-aware subscription
       const previews: Record<string, string> = data.data;

@@ -172,6 +172,54 @@ async function pushPreviews(ws: ServerWebSocket<WSData>) {
   }
 }
 
+// --- Server-side recently active tracking ---
+interface RecentAgent {
+  target: string;
+  name: string;
+  session: string;
+  lastBusy: number;
+}
+
+const BUSY_PATTERNS = /[∴✢⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◑◒◓⣾⣽⣻⢿⡿⣟⣯⣷]|● \w+\(|\b(Read|Edit|Write|Bash|Grep|Glob|Agent)\b/;
+const RECENT_TTL = 30 * 60 * 1000; // 30 minutes
+const recentAgents = new Map<string, RecentAgent>(); // target → entry
+
+function pruneRecent() {
+  const cutoff = Date.now() - RECENT_TTL;
+  for (const [k, v] of recentAgents) {
+    if (v.lastBusy < cutoff) recentAgents.delete(k);
+  }
+}
+
+function getRecentList(): RecentAgent[] {
+  pruneRecent();
+  return [...recentAgents.values()]
+    .sort((a, b) => b.lastBusy - a.lastBusy)
+    .slice(0, 10);
+}
+
+// Check all agents for busy status and update recentAgents
+async function updateRecentFromSessions(sessions: { name: string; windows: { index: number; name: string; active: boolean }[] }[]) {
+  const now = Date.now();
+  const checks: Promise<void>[] = [];
+
+  for (const s of sessions) {
+    for (const w of s.windows) {
+      const target = `${s.name}:${w.name}`;
+      checks.push(
+        capture(target, 5).then(content => {
+          const lines = content.split("\n").filter(l => l.trim());
+          const bottom = lines.slice(-5).join("\n");
+          if (BUSY_PATTERNS.test(bottom)) {
+            recentAgents.set(target, { target, name: w.name, session: s.name, lastBusy: now });
+          }
+        }).catch(() => {})
+      );
+    }
+  }
+  await Promise.allSettled(checks);
+}
+
 // Broadcast sessions to all clients (diff-only: skip if unchanged)
 let lastSessionsJson = "";
 async function broadcastSessions() {
@@ -179,6 +227,13 @@ async function broadcastSessions() {
   try {
     const sessions = await listSessions();
     const json = JSON.stringify(sessions);
+
+    // Update recent tracking (runs every session poll)
+    await updateRecentFromSessions(sessions);
+    // Broadcast recent list to all clients
+    const recentMsg = JSON.stringify({ type: "recent", agents: getRecentList() });
+    for (const ws of clients) ws.send(recentMsg);
+
     if (json === lastSessionsJson) return;
     lastSessionsJson = json;
     const msg = JSON.stringify({ type: "sessions", sessions });
@@ -229,8 +284,11 @@ export function startServer(port = +(process.env.MAW_PORT || 3456)) {
       open(ws: ServerWebSocket<WSData>) {
         clients.add(ws);
         startIntervals();
-        // Send sessions immediately
-        listSessions().then(s => ws.send(JSON.stringify({ type: "sessions", sessions: s }))).catch(() => {});
+        // Send sessions + recent immediately
+        listSessions().then(s => {
+          ws.send(JSON.stringify({ type: "sessions", sessions: s }));
+          ws.send(JSON.stringify({ type: "recent", agents: getRecentList() }));
+        }).catch(() => {});
       },
       message(ws: ServerWebSocket<WSData>, msg) {
         try {
