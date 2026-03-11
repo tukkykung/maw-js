@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
-import { listSessions, capture, sendKeys, selectWindow, ssh } from "./ssh";
+import { listSessions, capture, sendKeys, selectWindow } from "./ssh";
 import { processMirror } from "./overview";
 import { FeedTailer } from "./feed-tail";
-import type { ServerWebSocket } from "bun";
+import { MawEngine } from "./engine";
+import type { WSData } from "./types";
 
 const app = new Hono();
 app.use("/api/*", cors());
@@ -136,241 +137,23 @@ export { app };
 
 // --- WebSocket + Server ---
 
-type WSData = { target: string | null; previewTargets: Set<string> };
-
-const clients = new Set<ServerWebSocket<WSData>>();
-
-// Push capture to a specific client (only if changed)
-const lastContent = new Map<ServerWebSocket<WSData>, string>();
-
-async function pushCapture(ws: ServerWebSocket<WSData>) {
-  if (!ws.data.target) return;
-  try {
-    const content = await capture(ws.data.target, 80);
-    const prev = lastContent.get(ws);
-    if (content !== prev) {
-      lastContent.set(ws, content);
-      ws.send(JSON.stringify({ type: "capture", target: ws.data.target, content }));
-    }
-  } catch (e: any) {
-    ws.send(JSON.stringify({ type: "error", error: e.message }));
-  }
-}
-
-// Preview capture: lightweight 3-line captures for visible agents
-const lastPreviews = new Map<ServerWebSocket<WSData>, Map<string, string>>();
-
-async function pushPreviews(ws: ServerWebSocket<WSData>) {
-  const targets = ws.data.previewTargets;
-  if (!targets || targets.size === 0) return;
-  const prevMap = lastPreviews.get(ws) || new Map<string, string>();
-  const changed: Record<string, string> = {};
-  let hasChanges = false;
-
-  await Promise.allSettled([...targets].map(async (target) => {
-    try {
-      const content = await capture(target, 3);
-      const prev = prevMap.get(target);
-      if (content !== prev) {
-        prevMap.set(target, content);
-        changed[target] = content;
-        hasChanges = true;
-      }
-    } catch {}
-  }));
-
-  lastPreviews.set(ws, prevMap);
-  if (hasChanges) {
-    ws.send(JSON.stringify({ type: "previews", data: changed }));
-  }
-}
-
-// --- Server-side recently active tracking ---
-interface RecentAgent {
-  target: string;
-  name: string;
-  session: string;
-  lastBusy: number;
-}
-
-const BUSY_PATTERNS = /[∴✢⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◑◒◓⣾⣽⣻⢿⡿⣟⣯⣷]|● \w+\(|\b(Read|Edit|Write|Bash|Grep|Glob|Agent)\b/;
-const RECENT_TTL = 30 * 60 * 1000; // 30 minutes
-const recentAgents = new Map<string, RecentAgent>(); // target → entry
-
-function pruneRecent() {
-  const cutoff = Date.now() - RECENT_TTL;
-  for (const [k, v] of recentAgents) {
-    if (v.lastBusy < cutoff) recentAgents.delete(k);
-  }
-}
-
-function getRecentList(): RecentAgent[] {
-  pruneRecent();
-  return [...recentAgents.values()]
-    .sort((a, b) => b.lastBusy - a.lastBusy)
-    .slice(0, 10);
-}
-
-// Check all agents for busy status and update recentAgents
-async function updateRecentFromSessions(sessions: { name: string; windows: { index: number; name: string; active: boolean }[] }[]) {
-  const now = Date.now();
-  const checks: Promise<void>[] = [];
-
-  for (const s of sessions) {
-    for (const w of s.windows) {
-      const target = `${s.name}:${w.name}`;
-      checks.push(
-        capture(target, 5).then(content => {
-          const lines = content.split("\n").filter(l => l.trim());
-          const bottom = lines.slice(-5).join("\n");
-          if (BUSY_PATTERNS.test(bottom)) {
-            recentAgents.set(target, { target, name: w.name, session: s.name, lastBusy: now });
-          }
-        }).catch(() => {})
-      );
-    }
-  }
-  await Promise.allSettled(checks);
-}
-
-// Broadcast sessions to all clients (diff-only: skip if unchanged)
-let lastSessionsJson = "";
-async function broadcastSessions() {
-  if (clients.size === 0) return;
-  try {
-    const sessions = await listSessions();
-    const json = JSON.stringify(sessions);
-
-    // Update recent tracking (runs every session poll)
-    await updateRecentFromSessions(sessions);
-    // Broadcast recent list to all clients
-    const recentMsg = JSON.stringify({ type: "recent", agents: getRecentList() });
-    for (const ws of clients) ws.send(recentMsg);
-
-    if (json === lastSessionsJson) return;
-    lastSessionsJson = json;
-    const msg = JSON.stringify({ type: "sessions", sessions });
-    for (const ws of clients) ws.send(msg);
-  } catch {}
-}
-
-// Capture loop — push to each subscribed client
-let captureInterval: ReturnType<typeof setInterval> | null = null;
-let sessionInterval: ReturnType<typeof setInterval> | null = null;
-let previewInterval: ReturnType<typeof setInterval> | null = null;
-
-// Feed broadcast: emit events to all clients in real-time
-let feedUnsub: (() => void) | null = null;
-
-function startIntervals() {
-  if (captureInterval) return;
-  // Capture every 50ms for real-time feel (full terminal, single subscribed target)
-  captureInterval = setInterval(() => {
-    for (const ws of clients) pushCapture(ws);
-  }, 50);
-  // Sessions every 5s
-  sessionInterval = setInterval(broadcastSessions, 5000);
-  // Previews every 2s (lightweight 3-line captures for visible agents)
-  previewInterval = setInterval(() => {
-    for (const ws of clients) pushPreviews(ws);
-  }, 2000);
-  // Feed tailer
-  feedTailer.start();
-  feedUnsub = feedTailer.onEvent((event) => {
-    const msg = JSON.stringify({ type: "feed", event });
-    for (const ws of clients) ws.send(msg);
-  });
-}
-
-function stopIntervals() {
-  if (clients.size > 0) return;
-  if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
-  if (sessionInterval) { clearInterval(sessionInterval); sessionInterval = null; }
-  if (previewInterval) { clearInterval(previewInterval); previewInterval = null; }
-  if (feedUnsub) { feedUnsub(); feedUnsub = null; }
-  feedTailer.stop();
-}
-
 export function startServer(port = +(process.env.MAW_PORT || 3456)) {
+  const engine = new MawEngine({ feedTailer });
 
   const server = Bun.serve({
     port,
     fetch(req, server) {
       const url = new URL(req.url);
-      // Upgrade WebSocket
       if (url.pathname === "/ws") {
-        if (server.upgrade(req, { data: { target: null, previewTargets: new Set() } })) return;
+        if (server.upgrade(req, { data: { target: null, previewTargets: new Set() } as WSData })) return;
         return new Response("WebSocket upgrade failed", { status: 400 });
       }
       return app.fetch(req);
     },
     websocket: {
-      open(ws: ServerWebSocket<WSData>) {
-        clients.add(ws);
-        startIntervals();
-        // Send sessions + recent + feed history immediately
-        listSessions().then(s => {
-          ws.send(JSON.stringify({ type: "sessions", sessions: s }));
-          ws.send(JSON.stringify({ type: "recent", agents: getRecentList() }));
-        }).catch(() => {});
-        ws.send(JSON.stringify({ type: "feed-history", events: feedTailer.getRecent(50) }));
-      },
-      message(ws: ServerWebSocket<WSData>, msg) {
-        try {
-          const data = JSON.parse(msg as string);
-          if (data.type === "subscribe") {
-            ws.data.target = data.target;
-            pushCapture(ws); // immediate first push
-          } else if (data.type === "subscribe-previews") {
-            ws.data.previewTargets = new Set(data.targets || []);
-            pushPreviews(ws); // immediate first push
-          } else if (data.type === "select") {
-            selectWindow(data.target).catch(() => {});
-          } else if (data.type === "send") {
-            sendKeys(data.target, data.text)
-              .then(() => {
-                ws.send(JSON.stringify({ type: "sent", ok: true, target: data.target, text: data.text }));
-                // Push capture after short delay to show result
-                setTimeout(() => pushCapture(ws), 300);
-              })
-              .catch(e => ws.send(JSON.stringify({ type: "error", error: e.message })));
-          } else if (data.type === "sleep") {
-            // Ctrl+C to interrupt current task
-            sendKeys(data.target, "\x03")
-              .then(() => ws.send(JSON.stringify({ type: "action-ok", action: "sleep", target: data.target })))
-              .catch(e => ws.send(JSON.stringify({ type: "error", error: e.message })));
-          } else if (data.type === "stop") {
-            // Kill the tmux window
-            ssh(`tmux kill-window -t '${data.target}'`)
-              .then(() => ws.send(JSON.stringify({ type: "action-ok", action: "stop", target: data.target })))
-              .catch(e => ws.send(JSON.stringify({ type: "error", error: e.message })));
-          } else if (data.type === "wake") {
-            // Send command to restart agent
-            const cmd = data.command || "claude";
-            sendKeys(data.target, cmd + "\r")
-              .then(() => ws.send(JSON.stringify({ type: "action-ok", action: "wake", target: data.target })))
-              .catch(e => ws.send(JSON.stringify({ type: "error", error: e.message })));
-          } else if (data.type === "spawn") {
-            // Create new window in existing session
-            const session = data.session;
-            const name = data.name;
-            const cwd = data.cwd || process.cwd();
-            const cmd = data.command || "claude";
-            ssh(`tmux new-window -t '${session}' -n '${name}' -c '${cwd}'`)
-              .then(async () => {
-                if (cmd) await sendKeys(`${session}:${name}`, cmd + "\r");
-                ws.send(JSON.stringify({ type: "action-ok", action: "spawn", target: `${session}:${name}` }));
-              })
-              .catch(e => ws.send(JSON.stringify({ type: "error", error: e.message })));
-          }
-        } catch {}
-      },
-      close(ws: ServerWebSocket<WSData>) {
-        clients.delete(ws);
-        lastContent.delete(ws);
-        lastPreviews.delete(ws);
-        stopIntervals();
-      },
+      open: (ws) => engine.handleOpen(ws),
+      message: (ws, msg) => engine.handleMessage(ws, msg),
+      close: (ws) => engine.handleClose(ws),
     },
   });
 

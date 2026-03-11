@@ -1,0 +1,74 @@
+import { sendKeys, selectWindow, ssh } from "./ssh";
+import type { MawWS, Handler, MawEngine } from "./types";
+
+/** Run an async action with standard ok/error response */
+async function runAction(ws: MawWS, action: string, target: string, fn: () => Promise<void>) {
+  try {
+    await fn();
+    ws.send(JSON.stringify({ type: "action-ok", action, target }));
+  } catch (e: any) {
+    ws.send(JSON.stringify({ type: "error", error: e.message }));
+  }
+}
+
+// --- Handlers ---
+
+const subscribe: Handler = (ws, data, engine) => {
+  ws.data.target = data.target;
+  engine.pushCapture(ws);
+};
+
+const subscribePreviews: Handler = (ws, data, engine) => {
+  ws.data.previewTargets = new Set(data.targets || []);
+  engine.pushPreviews(ws);
+};
+
+const select: Handler = (_ws, data) => {
+  selectWindow(data.target).catch(() => {});
+};
+
+const send: Handler = (ws, data, engine) => {
+  sendKeys(data.target, data.text)
+    .then(() => {
+      ws.send(JSON.stringify({ type: "sent", ok: true, target: data.target, text: data.text }));
+      setTimeout(() => engine.pushCapture(ws), 300);
+    })
+    .catch(e => ws.send(JSON.stringify({ type: "error", error: e.message })));
+};
+
+const sleep: Handler = (ws, data) => {
+  runAction(ws, "sleep", data.target, () => sendKeys(data.target, "\x03"));
+};
+
+const stop: Handler = (ws, data) => {
+  runAction(ws, "stop", data.target, () => ssh(`tmux kill-window -t '${data.target}'`));
+};
+
+const wake: Handler = (ws, data) => {
+  const cmd = data.command || "claude";
+  runAction(ws, "wake", data.target, () => sendKeys(data.target, cmd + "\r"));
+};
+
+const spawn: Handler = (ws, data) => {
+  const session = data.session;
+  const name = data.name;
+  const cwd = data.cwd || process.cwd();
+  const cmd = data.command || "claude";
+  const target = `${session}:${name}`;
+  runAction(ws, "spawn", target, async () => {
+    await ssh(`tmux new-window -t '${session}' -n '${name}' -c '${cwd}'`);
+    if (cmd) await sendKeys(target, cmd + "\r");
+  });
+};
+
+/** Register all built-in WebSocket handlers on the engine */
+export function registerBuiltinHandlers(engine: MawEngine) {
+  engine.on("subscribe", subscribe);
+  engine.on("subscribe-previews", subscribePreviews);
+  engine.on("select", select);
+  engine.on("send", send);
+  engine.on("sleep", sleep);
+  engine.on("stop", stop);
+  engine.on("wake", wake);
+  engine.on("spawn", spawn);
+}
