@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { AgentAvatar } from "./AgentAvatar";
 import { MiniMonitor } from "./MiniMonitor";
 import type { AgentState } from "../lib/types";
@@ -14,6 +14,8 @@ interface AgentRowProps {
   showPreview: (agent: AgentState, accent: string, label: string, e: React.MouseEvent) => void;
   hidePreview: () => void;
   onAgentClick: (agent: AgentState, accent: string, label: string, e: React.MouseEvent) => void;
+  onMicClick?: (target: string) => void;
+  isMicActive?: boolean;
 }
 
 export const AgentRow = memo(function AgentRow({
@@ -27,9 +29,16 @@ export const AgentRow = memo(function AgentRow({
   showPreview,
   hidePreview,
   onAgentClick,
+  onMicClick,
+  isMicActive,
 }: AgentRowProps) {
   const isBusy = agent.status === "busy";
   const displayName = agent.name.replace(/-oracle$/, "").replace(/-/g, " ");
+
+  const handleMic = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onMicClick?.(agent.target);
+  }, [onMicClick, agent.target]);
 
   return (
     <div
@@ -106,6 +115,25 @@ export const AgentRow = memo(function AgentRow({
           {agent.preview?.slice(0, 80) || "\u00a0"}
         </span>
       </div>
+
+      {/* Mic button */}
+      {onMicClick && (
+        <button
+          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 cursor-pointer transition-all active:scale-90"
+          style={{
+            background: isMicActive ? accent : `${accent}20`,
+            boxShadow: isMicActive ? `0 0 16px ${accent}80` : "none",
+          }}
+          onClick={handleMic}
+          aria-label={`Talk to ${displayName}`}
+        >
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+            stroke={isMicActive ? "#000" : accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x={9} y={1} width={6} height={11} rx={3} />
+            <path d="M19 10v1a7 7 0 01-14 0v-1M12 18v4M8 22h8" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 });

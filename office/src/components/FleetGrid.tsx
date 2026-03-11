@@ -2,9 +2,11 @@ import { memo, useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { HoverPreviewCard } from "./HoverPreviewCard";
 import { StageSection } from "./StageSection";
 import { AgentRow } from "./AgentRow";
+import { SpeechOverlay } from "./SpeechOverlay";
 import { roomStyle, PREVIEW_CARD } from "../lib/constants";
 import { BottomStats } from "./BottomStats";
 import { useFps } from "./FpsCounter";
+import { useSpeech } from "../hooks/useSpeech";
 import { useFleetStore, RECENT_TTL_MS, type RecentEntry } from "../lib/store";
 import type { AgentState, Session, AgentEvent } from "../lib/types";
 
@@ -81,6 +83,16 @@ export const FleetGrid = memo(function FleetGrid({
   const fps = useFps();
   const observe = useVisibleTargets(send);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // --- Speech (walkie-talkie) ---
+  const speech = useSpeech(send);
+  const onMicClick = useCallback((target: string) => {
+    if (speech.listening && speech.target === target) {
+      speech.stopListening();
+    } else {
+      speech.startListening(target);
+    }
+  }, [speech]);
 
   // --- Zustand store ---
   const { recentMap, markBusy, pruneRecent, sortMode, setSortMode, grouped, toggleGrouped, collapsed, toggleCollapsed } = useFleetStore();
@@ -284,7 +296,8 @@ export const FleetGrid = memo(function FleetGrid({
                   <AgentRow key={`recent-${entry.target}`} agent={agent} accent={rs.accent} roomLabel={rs.label}
                     saiyan={saiyanTargets.has(entry.target)} isLast={i === recentlyActive.length - 1}
                     agoLabel={agoLabel}
-                    observe={observe} showPreview={showPreview} hidePreview={hidePreview} onAgentClick={onAgentClick} />
+                    observe={observe} showPreview={showPreview} hidePreview={hidePreview} onAgentClick={onAgentClick}
+                    onMicClick={onMicClick} isMicActive={speech.listening && speech.target === entry.target} />
                 );
               })}
             </div>
@@ -316,7 +329,8 @@ export const FleetGrid = memo(function FleetGrid({
                   {vr.agents.map((agent, i) => (
                     <AgentRow key={agent.target} agent={agent} accent={style.accent} roomLabel={vr.label}
                       saiyan={saiyanTargets.has(agent.target)} isLast={i === vr.agents.length - 1}
-                      observe={observe} showPreview={showPreview} hidePreview={hidePreview} onAgentClick={onAgentClick} />
+                      observe={observe} showPreview={showPreview} hidePreview={hidePreview} onAgentClick={onAgentClick}
+                      onMicClick={onMicClick} isMicActive={speech.listening && speech.target === agent.target} />
                   ))}
                 </div>
               )}
@@ -361,6 +375,21 @@ export const FleetGrid = memo(function FleetGrid({
             onInputBufChange={(val) => setInputBuf(pinnedPreview.agent.target, val)} />
         </div>
       )}
+
+      {/* Speech overlay */}
+      {speech.listening && (() => {
+        const agent = agents.find(a => a.target === speech.target);
+        return (
+          <SpeechOverlay
+            listening={speech.listening}
+            transcript={speech.transcript}
+            target={speech.target}
+            agentName={agent?.name}
+            agentSession={agent?.session}
+            onStop={speech.stopListening}
+          />
+        );
+      })()}
     </div>
   );
 });
