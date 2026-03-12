@@ -72,14 +72,16 @@ export class Tmux {
     await this.run("new-session", ...args);
   }
 
-  /** Create a grouped session — shares windows with parent, independent sizing. Auto-destroys on detach. */
+  /** Create a grouped session — shares windows with parent, independent sizing.
+   *  Caller is responsible for cleanup via killSession(). */
   async newGroupedSession(parent: string, name: string, opts: {
     cols: number;
     rows: number;
     window?: string;
   }): Promise<void> {
     await this.run("new-session", "-d", "-t", parent, "-s", name, "-x", opts.cols, "-y", opts.rows);
-    await this.setOption(name, "destroy-unattached", "on");
+    // Note: do NOT set destroy-unattached here — tmux kills the session
+    // immediately since it was created detached (-d) with no client yet.
     if (opts.window) await this.selectWindow(`${name}:${opts.window}`);
   }
 

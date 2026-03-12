@@ -80,11 +80,10 @@ describe("Tmux", () => {
   });
 
   describe("newGroupedSession", () => {
-    test("creates grouped session + sets destroy-unattached", async () => {
+    test("creates grouped session without destroy-unattached", async () => {
       await t.newGroupedSession("oracles", "maw-pty-1", { cols: 120, rows: 40 });
       expect(commands).toEqual([
         "tmux new-session -d -t oracles -s maw-pty-1 -x 120 -y 40 2>/dev/null",
-        "tmux set-option -t maw-pty-1 destroy-unattached on 2>/dev/null",
       ]);
     });
 
@@ -92,7 +91,6 @@ describe("Tmux", () => {
       await t.newGroupedSession("oracles", "maw-pty-2", { cols: 80, rows: 24, window: "3" });
       expect(commands).toEqual([
         "tmux new-session -d -t oracles -s maw-pty-2 -x 80 -y 24 2>/dev/null",
-        "tmux set-option -t maw-pty-2 destroy-unattached on 2>/dev/null",
         "tmux select-window -t maw-pty-2:3 2>/dev/null",
       ]);
     });
