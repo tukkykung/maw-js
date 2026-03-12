@@ -72,7 +72,7 @@ function matchGlob(pattern: string, name: string): boolean {
   return false;
 }
 
-/** Build the full command string for an agent, including env var prefix */
+/** Build the full command string for an agent (no env vars — use setSessionEnv) */
 export function buildCommand(agentName: string): string {
   const config = loadConfig();
   let cmd = config.commands.default || "claude";
@@ -83,10 +83,10 @@ export function buildCommand(agentName: string): string {
     if (matchGlob(pattern, agentName)) { cmd = command; break; }
   }
 
-  // Prepend env vars for tmux send-keys
-  const envPrefix = Object.entries(config.env)
-    .map(([k, v]) => `${k}=${v}`)
-    .join(" ");
+  return cmd;
+}
 
-  return envPrefix ? `${envPrefix} ${cmd}` : cmd;
+/** Get env vars from config (for tmux set-environment) */
+export function getEnvVars(): Record<string, string> {
+  return loadConfig().env || {};
 }

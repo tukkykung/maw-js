@@ -1,6 +1,6 @@
 import { listSessions, ssh } from "./ssh";
 import type { Session } from "./ssh";
-import { loadConfig, buildCommand } from "./config";
+import { loadConfig, buildCommand, getEnvVars } from "./config";
 
 /** Fetch a GitHub issue and build a prompt for claude -p */
 export async function fetchIssuePrompt(issueNum: number, repo?: string): Promise<string> {
@@ -87,6 +87,13 @@ export async function detectSession(oracle: string): Promise<string | null> {
     || null;
 }
 
+/** Set config env vars on a tmux session (hidden from screen output) */
+async function setSessionEnv(session: string): Promise<void> {
+  for (const [key, val] of Object.entries(getEnvVars())) {
+    await ssh(`tmux set-environment -t '${session}' '${key}' '${val}'`);
+  }
+}
+
 export async function cmdWake(oracle: string, opts: { task?: string; newWt?: string; prompt?: string }): Promise<string> {
   const { repoPath, repoName, parentDir } = await resolveOracle(oracle);
 
@@ -96,6 +103,7 @@ export async function cmdWake(oracle: string, opts: { task?: string; newWt?: str
     session = getSessionMap()[oracle] || oracle;
     // Create session with main window
     await ssh(`tmux new-session -d -s '${session}' -n '${oracle}' -c '${repoPath}'`);
+    await setSessionEnv(session);
     await new Promise(r => setTimeout(r, 300));
     await ssh(`tmux send-keys -t '${session}:${oracle}' '${buildCommand(oracle + "-oracle")}' Enter`);
     console.log(`\x1b[32m+\x1b[0m created session '${session}' (main: ${oracle})`);
@@ -109,6 +117,9 @@ export async function cmdWake(oracle: string, opts: { task?: string; newWt?: str
       await ssh(`tmux send-keys -t '${session}:${wtWindowName}' '${buildCommand(wtWindowName)}' Enter`);
       console.log(`\x1b[32m+\x1b[0m window: ${wtWindowName}`);
     }
+  } else {
+    // Ensure env vars are set on existing session (may predate this fix)
+    await setSessionEnv(session);
   }
 
   let targetPath = repoPath;

@@ -1,6 +1,6 @@
 import { ssh } from "./ssh";
 import { resolveOracle, findWorktrees } from "./wake";
-import { buildCommand } from "./config";
+import { buildCommand, getEnvVars } from "./config";
 
 export async function cmdSpawn(oracle: string, opts: { name?: string; continue?: boolean }) {
   const { repoPath, repoName, parentDir } = await resolveOracle(oracle);
@@ -19,6 +19,10 @@ export async function cmdSpawn(oracle: string, opts: { name?: string; continue?:
 
   // Create session with main repo as first window
   await ssh(`tmux new-session -d -s '${sessionName}' -n '${oracle}-oracle' -c '${repoPath}'`);
+  // Set env vars on session (not visible in tmux output)
+  for (const [key, val] of Object.entries(getEnvVars())) {
+    await ssh(`tmux set-environment -t '${sessionName}' '${key}' '${val}'`);
+  }
   console.log(`\x1b[32m+\x1b[0m ${oracle} → ${repoPath}`);
 
   // Add worktree windows

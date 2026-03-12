@@ -1,7 +1,7 @@
 import { join } from "path";
 import { readdirSync } from "fs";
 import { ssh } from "./ssh";
-import { loadConfig, buildCommand } from "./config";
+import { loadConfig, buildCommand, getEnvVars } from "./config";
 
 interface FleetWindow {
   name: string;
@@ -72,6 +72,10 @@ export async function cmdWakeAll(opts: { kill?: boolean } = {}) {
     const first = sess.windows[0];
     const firstPath = `${loadConfig().ghqRoot}/${first.repo}`;
     await ssh(`tmux new-session -d -s '${sess.name}' -n '${first.name}' -c '${firstPath}'`);
+    // Set env vars on session (not visible in tmux output)
+    for (const [key, val] of Object.entries(getEnvVars())) {
+      await ssh(`tmux set-environment -t '${sess.name}' '${key}' '${val}'`);
+    }
 
     if (!sess.skip_command) {
       try { await ssh(`tmux send-keys -t '${sess.name}:${first.name}' '${buildCommand(first.name)}' Enter`); } catch { /* ok */ }
