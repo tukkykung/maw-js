@@ -56,9 +56,17 @@ export async function cmdDone(windowName: string) {
         const mainPath = join(ghqRoot, org, mainRepo);
 
         try {
+          // Detect branch name before removing
+          let branch = "";
+          try { branch = (await ssh(`git -C '${fullPath}' rev-parse --abbrev-ref HEAD`)).trim(); } catch {}
           await ssh(`git -C '${mainPath}' worktree remove '${fullPath}' --force`);
+          await ssh(`git -C '${mainPath}' worktree prune`);
           console.log(`  \x1b[32m✓\x1b[0m removed worktree ${win.repo}`);
           removedWorktree = true;
+          // Clean up branch
+          if (branch && branch !== "main" && branch !== "HEAD") {
+            try { await ssh(`git -C '${mainPath}' branch -d '${branch}'`); console.log(`  \x1b[32m✓\x1b[0m deleted branch ${branch}`); } catch {}
+          }
         } catch (e: any) {
           console.log(`  \x1b[33m⚠\x1b[0m worktree remove failed: ${e.message || e}`);
         }
@@ -76,9 +84,15 @@ export async function cmdDone(windowName: string) {
         const mainRepo = base.split(".wt-")[0];
         const mainPath = wtPath.replace(base, mainRepo);
         try {
+          let branch = "";
+          try { branch = (await ssh(`git -C '${wtPath}' rev-parse --abbrev-ref HEAD`)).trim(); } catch {}
           await ssh(`git -C '${mainPath}' worktree remove '${wtPath}' --force`);
+          await ssh(`git -C '${mainPath}' worktree prune`);
           console.log(`  \x1b[32m✓\x1b[0m removed worktree ${base}`);
           removedWorktree = true;
+          if (branch && branch !== "main" && branch !== "HEAD") {
+            try { await ssh(`git -C '${mainPath}' branch -d '${branch}'`); console.log(`  \x1b[32m✓\x1b[0m deleted branch ${branch}`); } catch {}
+          }
         } catch {}
       }
     } catch { /* no matching worktrees */ }
